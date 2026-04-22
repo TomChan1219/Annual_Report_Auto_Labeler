@@ -223,7 +223,33 @@ UI 中已经把这两种策略显式区分开：
 - 概览页用于查看每篇年报的原始召回数、最终入选数、编码与状态
 - 审核页用于逐条查看句子、判断理由、一类关键词命中和二类关键词命中
 
-如果后续把界面截图文件放进仓库，例如 `docs/ui-overview.png`，可以继续把截图直接嵌进本 README。
+审核页界面示意：
+
+![审核页界面](./ui-review.png)
+
+## 关键词词典位置
+
+一类关键词和二类关键词都定义在：
+
+- [report_labeler/keywords.py](./report_labeler/keywords.py)
+
+其中：
+
+- `PRIMARY_KEYWORDS_BY_CATEGORY` 对应一类关键词
+- `SECONDARY_KEYWORDS_BY_CATEGORY` 对应二类关键词
+
+如果你想查看当前用了哪些关键词，直接打开这个文件即可。
+
+## 如何补充二类关键词
+
+如果某些企业年报写法比较特殊，导致只靠现有词典召回不足，可以直接修改程序里的二类关键词：
+
+1. 打开 [report_labeler/keywords.py](./report_labeler/keywords.py)
+2. 找到 `SECONDARY_KEYWORDS_BY_CATEGORY`
+3. 在对应类别里补充新的兜底关键词
+4. 重新运行应用
+
+这个修改方式是直接生效的，不需要改数据库，也不需要重新训练模型。
 
 ## 安装与运行
 
