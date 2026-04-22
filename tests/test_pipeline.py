@@ -131,6 +131,9 @@ class PipelineTests(unittest.TestCase):
                 list(submission_df.columns),
                 ["句子内容", "来源文件", "人工标注标签", "id", "year", "判断理由"],
             )
+            self.assertIn("显示名称", analysis_df.columns)
+            self.assertIn("primary_keywords", analysis_df.columns)
+            self.assertIn("secondary_keywords", analysis_df.columns)
             self.assertIn("判断理由", analysis_df.columns)
 
     def test_run_single_keeps_backward_compatibility(self):

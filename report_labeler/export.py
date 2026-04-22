@@ -4,7 +4,22 @@ from io import BytesIO
 
 import pandas as pd
 
+from report_labeler.io_utils import parse_filename
+from report_labeler.keywords import PRIMARY_KEYWORDS_BY_CATEGORY, SECONDARY_KEYWORDS_BY_CATEGORY
 from report_labeler.models import JudgmentRecord
+
+
+PRIMARY_KEYWORDS = {
+    keyword
+    for words in PRIMARY_KEYWORDS_BY_CATEGORY.values()
+    for keyword in words
+}
+
+SECONDARY_KEYWORDS = {
+    keyword
+    for words in SECONDARY_KEYWORDS_BY_CATEGORY.values()
+    for keyword in words
+}
 
 
 def build_submission_dataframe(records: list[JudgmentRecord]) -> pd.DataFrame:
@@ -30,10 +45,12 @@ def build_submission_dataframe(records: list[JudgmentRecord]) -> pd.DataFrame:
 def build_analysis_dataframe(records: list[JudgmentRecord]) -> pd.DataFrame:
     rows = []
     for record in records:
+        primary_keywords, secondary_keywords = split_keyword_hits(record.matched_keywords)
         rows.append(
             {
                 "record_id": record.record_id,
                 "来源文件": file_name_only(record.source_file),
+                "显示名称": build_display_name(record.source_file, record.year, record.company_name),
                 "source_file": record.source_file,
                 "company_name": record.company_name,
                 "id": record.stock_id,
@@ -42,6 +59,8 @@ def build_analysis_dataframe(records: list[JudgmentRecord]) -> pd.DataFrame:
                 "sentence_index": record.sentence_index,
                 "char_position": record.char_position,
                 "matched_keywords": ", ".join(record.matched_keywords),
+                "primary_keywords": ", ".join(primary_keywords),
+                "secondary_keywords": ", ".join(secondary_keywords),
                 "keyword_categories": ", ".join(record.keyword_categories),
                 "rule_flags": ", ".join(record.rule_flags),
                 "rule_label": record.rule_label,
@@ -89,3 +108,19 @@ def write_excel_bytes(sheets: dict[str, pd.DataFrame], output_path: str | None =
 
 def file_name_only(path: str) -> str:
     return path.replace("\\", "/").split("/")[-1]
+
+
+def build_display_name(path: str, year: str | None = None, company_name: str | None = None) -> str:
+    if not year or not company_name:
+        parsed = parse_filename(path)
+        year = year or parsed.get("year")
+        company_name = company_name or parsed.get("company_name")
+    if year and company_name:
+        return f"{year} {company_name}"
+    return file_name_only(path)
+
+
+def split_keyword_hits(keywords: list[str]) -> tuple[list[str], list[str]]:
+    primary = [keyword for keyword in keywords if keyword in PRIMARY_KEYWORDS]
+    secondary = [keyword for keyword in keywords if keyword in SECONDARY_KEYWORDS and keyword not in primary]
+    return primary, secondary

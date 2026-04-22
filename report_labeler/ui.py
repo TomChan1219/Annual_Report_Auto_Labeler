@@ -271,7 +271,7 @@ def render_overview() -> None:
         ].copy()
     else:
         detail_df = df[df["显示名称"] == selected_file][
-            ["句子内容", "final_label", "reviewed_label", "confidence", "判断理由", "matched_keywords"]
+            ["句子内容", "final_label", "reviewed_label", "confidence", "判断理由", "primary_keywords", "secondary_keywords"]
         ].copy()
     st.dataframe(detail_df, use_container_width=True)
 
@@ -302,6 +302,8 @@ def render_review() -> None:
     filtered = filtered[filtered["confidence"] >= confidence_threshold]
     if keyword_query:
         mask = filtered["matched_keywords"].fillna("").str.contains(keyword_query, case=False)
+        mask = mask | filtered["primary_keywords"].fillna("").str.contains(keyword_query, case=False)
+        mask = mask | filtered["secondary_keywords"].fillna("").str.contains(keyword_query, case=False)
         mask = mask | filtered["句子内容"].fillna("").str.contains(keyword_query, case=False)
         filtered = filtered[mask]
 
@@ -315,7 +317,8 @@ def render_review() -> None:
                 "句子内容",
                 "sentence_index",
                 "char_position",
-                "matched_keywords",
+                "primary_keywords",
+                "secondary_keywords",
                 "final_label",
                 "reviewed_label",
                 "confidence",
@@ -331,6 +334,8 @@ def render_review() -> None:
             "reviewed_label": st.column_config.SelectboxColumn("人工复核标签", options=[None, 0, 1]),
             "review_note": st.column_config.TextColumn("审核备注"),
             "句子内容": st.column_config.TextColumn("句子内容", width="large"),
+            "primary_keywords": st.column_config.TextColumn("一类关键词命中", width="medium"),
+            "secondary_keywords": st.column_config.TextColumn("二类关键词命中", width="medium"),
             "context_before": st.column_config.TextColumn("上文", width="large"),
             "context_after": st.column_config.TextColumn("下文", width="large"),
         },
@@ -343,7 +348,8 @@ def render_review() -> None:
             "句子内容",
             "sentence_index",
             "char_position",
-            "matched_keywords",
+            "primary_keywords",
+            "secondary_keywords",
             "final_label",
             "confidence",
             "判断理由",
