@@ -6,16 +6,16 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from report_labeler.export import build_analysis_dataframe, export_dual_xlsx
+from report_labeler.export import build_analysis_dataframe, build_preview_export_dataframe, export_dual_xlsx, export_preview_xlsx
 from report_labeler.io_utils import parse_filename
 from report_labeler.models import JudgmentRecord, ModelConfig, PipelineConfig
 from report_labeler.pipeline import judge_preview, preview_files
 
 
 def main() -> None:
-    st.set_page_config(page_title="企业年报工业互联网应用自动识别原型", layout="wide")
-    st.title("企业年报工业互联网应用自动识别原型")
-    st.caption("先预览候选句数量，再确认后调用 AI 标注。")
+    st.set_page_config(page_title="企业年报工业互联网应用自动识别工具", layout="wide")
+    st.title("企业年报工业互联网应用自动识别工具")
+    st.caption("先预览候选句，再确认后调用 AI 标注；如需更宽松召回，可适当放宽关键词策略后再人工筛选。")
 
     init_state()
 
@@ -373,8 +373,35 @@ def render_review() -> None:
 
 def render_export(output_path: str) -> None:
     result = st.session_state.get("run_result")
+    if not result:
+        st.info("请先完成候选句预览或 AI 标注后再导出。")
+        return
+
+    if result.get("stage") == "preview":
+        records = get_active_records()
+        if not records:
+            st.info("当前没有可导出的候选句。")
+            return
+        payload = export_preview_xlsx(records)
+        st.download_button(
+            "下载候选句预览表",
+            data=payload,
+            file_name="annual_report_preview_candidates.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            on_click="ignore",
+            key="download_preview_xlsx",
+        )
+        st.dataframe(build_preview_export_dataframe(records), use_container_width=True, hide_index=True)
+        if st.button("写入候选句预览到导出路径"):
+            target = Path(output_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            export_preview_xlsx(records, str(target))
+            st.success(f"已写出候选句预览到: {target}")
+        return
+
     edited_df = get_active_analysis_df()
-    if not result or result.get("stage") != "judged" or edited_df is None or edited_df.empty:
+    if edited_df is None or edited_df.empty:
         st.info("请先完成 AI 标注后再导出。")
         return
 

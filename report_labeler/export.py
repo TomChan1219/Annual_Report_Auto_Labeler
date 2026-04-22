@@ -6,7 +6,7 @@ import pandas as pd
 
 from report_labeler.io_utils import parse_filename
 from report_labeler.keywords import PRIMARY_KEYWORDS_BY_CATEGORY, SECONDARY_KEYWORDS_BY_CATEGORY
-from report_labeler.models import JudgmentRecord
+from report_labeler.models import JudgmentRecord, SentenceRecord
 
 
 PRIMARY_KEYWORDS = {
@@ -40,6 +40,26 @@ def build_submission_dataframe(records: list[JudgmentRecord]) -> pd.DataFrame:
         rows,
         columns=["句子内容", "来源文件", "人工标注标签", "id", "year", "判断理由"],
     )
+
+
+def build_preview_export_dataframe(records: list[SentenceRecord]) -> pd.DataFrame:
+    rows = []
+    for record in records:
+        primary_keywords, secondary_keywords = split_keyword_hits(record.matched_keywords)
+        rows.append(
+            {
+                "来源文件": file_name_only(record.source_file),
+                "显示名称": build_display_name(record.source_file, record.year, record.company_name),
+                "id": record.stock_id,
+                "year": record.year,
+                "句子内容": record.sentence,
+                "一类关键词命中": ", ".join(primary_keywords),
+                "二类关键词命中": ", ".join(secondary_keywords),
+                "规则标签提示": record.rule_label,
+                "规则判断理由": record.rule_reason,
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def build_analysis_dataframe(records: list[JudgmentRecord]) -> pd.DataFrame:
@@ -84,6 +104,10 @@ def export_submission_xlsx(records: list[JudgmentRecord], output_path: str | Non
 
 def export_analysis_xlsx(records: list[JudgmentRecord], output_path: str | None = None) -> bytes:
     return write_excel_bytes({"分析详表": build_analysis_dataframe(records)}, output_path)
+
+
+def export_preview_xlsx(records: list[SentenceRecord], output_path: str | None = None) -> bytes:
+    return write_excel_bytes({"候选句预览": build_preview_export_dataframe(records)}, output_path)
 
 
 def export_dual_xlsx(records: list[JudgmentRecord], output_path: str | None = None) -> bytes:

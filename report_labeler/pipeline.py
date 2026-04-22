@@ -14,7 +14,15 @@ from report_labeler.models import (
     ProcessingError,
     SentenceRecord,
 )
-from report_labeler.preprocess import clean_text, is_title_like, split_sentences
+from report_labeler.preprocess import (
+    clean_text,
+    is_fragment_like,
+    is_table_like,
+    is_title_like,
+    normalize_sentence_key,
+    normalize_sentence_text,
+    split_sentences,
+)
 from report_labeler.rules import evaluate_rules
 
 
@@ -194,12 +202,17 @@ def build_sentence_records(document, sentences: list[str], pipeline_config: Pipe
     secondary_enabled = allows_secondary_keywords(pipeline_config.filter_strength)
 
     for idx, sentence in enumerate(sentences):
-        normalized_sentence = sentence.strip()
-        if normalized_sentence in seen_sentences:
+        normalized_sentence = normalize_sentence_text(sentence.strip())
+        sentence_key = normalize_sentence_key(normalized_sentence)
+        if not sentence_key or sentence_key in seen_sentences:
             continue
-        seen_sentences.add(normalized_sentence)
+        seen_sentences.add(sentence_key)
 
         if is_title_like(normalized_sentence):
+            continue
+        if is_table_like(normalized_sentence):
+            continue
+        if is_fragment_like(normalized_sentence):
             continue
 
         evaluation = evaluate_rules(normalized_sentence)
@@ -207,13 +220,47 @@ def build_sentence_records(document, sentences: list[str], pipeline_config: Pipe
             continue
         if not secondary_enabled and "primary_keyword_hit" not in evaluation.flags:
             continue
+        if "finance_accounting" in evaluation.flags and "industrial_scene" not in evaluation.flags:
+            continue
+        if "tabular_noise" in evaluation.flags and "industrial_scene" not in evaluation.flags:
+            continue
+        if "non_chinese_noise" in evaluation.flags and "industrial_scene" not in evaluation.flags:
+            continue
+        if "policy_or_regulation" in evaluation.flags and "self_use_action" not in evaluation.flags:
+            continue
+        if "disclosure_or_audit" in evaluation.flags and not {
+            "industrial_scene",
+            "self_use_action",
+        }.intersection(evaluation.flags):
+            continue
+        if "capital_or_investment" in evaluation.flags and not {
+            "industrial_scene",
+            "self_use_action",
+        }.intersection(evaluation.flags):
+            continue
+        if "external_service" in evaluation.flags and "industrial_scene" not in evaluation.flags:
+            continue
+        if "high_noise_primary_keyword" in evaluation.flags and not {
+            "industrial_scene",
+            "self_use_action",
+            "effect_signal",
+        }.intersection(evaluation.flags):
+            continue
+        if "weak_secondary_only" in evaluation.flags and not {
+            "industrial_scene",
+            "self_use_action",
+            "effect_signal",
+        }.intersection(evaluation.flags):
+            continue
 
         stored_sentence = normalized_sentence
-        if len(stored_sentence) > pipeline_config.sentence_max_chars:
-            stored_sentence = stored_sentence[: pipeline_config.sentence_max_chars].rstrip() + "..."
 
-        context_before = " ".join(sentences[max(0, idx - context_window) : idx])
-        context_after = " ".join(sentences[idx + 1 : idx + 1 + context_window])
+        context_before = " ".join(
+            normalize_sentence_text(item) for item in sentences[max(0, idx - context_window) : idx]
+        )
+        context_after = " ".join(
+            normalize_sentence_text(item) for item in sentences[idx + 1 : idx + 1 + context_window]
+        )
         char_position = document.cleaned_text.find(normalized_sentence[:50])
 
         records.append(
@@ -365,6 +412,24 @@ def score_candidate(record: SentenceRecord, filter_strength: str) -> float:
         score -= 0.5 if mode == "二类关键词兜底" else 1.5
     if "background_intro" in flags:
         score -= 0.5 if mode == "二类关键词兜底" else 2.5
+    if "finance_accounting" in flags:
+        score -= 3.5
+    if "tabular_noise" in flags:
+        score -= 4.0
+    if "high_noise_primary_keyword" in flags:
+        score -= 3.0
+    if "weak_secondary_only" in flags:
+        score -= 3.0
+    if "non_chinese_noise" in flags:
+        score -= 5.0
+    if "policy_or_regulation" in flags:
+        score -= 3.0
+    if "disclosure_or_audit" in flags:
+        score -= 4.0
+    if "capital_or_investment" in flags:
+        score -= 3.5
+    if "external_service" in flags:
+        score -= 3.0
     score += min(record.rule_confidence, 1.0)
     return score
 
